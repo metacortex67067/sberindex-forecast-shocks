@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+results/members_v5/
+results/archive_leak_v1/
+results/*.npy
+results/*.npz
+reports/latex/
+data/raw/*.gpkg
+data/raw/inid_settlements.csv
+data/raw/news_json/
+.DS_Store

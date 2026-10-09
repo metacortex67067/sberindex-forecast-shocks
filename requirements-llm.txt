@@ -1,0 +1,10 @@
+# Только для LLM-разметки новостей (scripts/run_news_llm.py, нужен GPU).
+# Ставится в ОТДЕЛЬНОЕ окружение: vllm 0.31 требует numpy < 2.5, а основной расчёт идёт на numpy 2.5.3.
+#   python -m venv .venv-llm && .venv-llm/bin/pip install -r requirements-llm.txt
+#   FULL=1 PY_LLM=.venv-llm/bin/python bash run_all.sh
+vllm==0.31.0
+pandas==2.3.3
+pyarrow==25.0.1
+openpyxl==3.1.5
+PyYAML==6.0.3
+RapidFuzz==3.14.6

@@ -1,0 +1,25 @@
+body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1b1b1b; max-width: 980px; margin: 0 auto; padding: 0 18px; }
+h1 { font-size: 20pt; color: #14523a; border-bottom: 2px solid #14523a; padding-bottom: 4px; margin-top: 28px; }
+h1.title { font-size: 22pt; border: none; text-align: left; }
+h2 { font-size: 14pt; color: #14523a; margin-top: 22px; }
+h3 { font-size: 11.5pt; color: #1f6f50; margin-top: 16px; }
+table { border-collapse: collapse; margin: 10px 0 14px; font-size: 8.6pt; width: 100%; page-break-inside: auto; }
+th { background: #e8f3ee; text-align: left; }
+th, td { border: 1px solid #c9d6d0; padding: 3px 6px; vertical-align: top; }
+tr:nth-child(even) td { background: #f8fbfa; }
+img { max-width: 100%; display: block; margin: 8px auto; page-break-inside: avoid; }
+figure { margin: 8px 0 14px; page-break-inside: avoid; }
+figcaption { font-size: 8.8pt; color: #555; text-align: center; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.8pt; background: #f2f4f3; padding: 0 3px; }
+pre { background: #f2f4f3; padding: 8px; font-size: 8.4pt; overflow-x: auto; page-break-inside: avoid; }
+blockquote { border-left: 4px solid #1f6f50; margin: 10px 0; padding: 4px 12px; background: #f3faf6; }
+#TOC { font-size: 9.5pt; background: #f7faf9; border: 1px solid #dce7e2; padding: 6px 14px; }
+#TOC ul { list-style: none; padding-left: 14px; }
+.box { border: 1px solid #c9d6d0; background: #f3faf6; padding: 6px 12px; }
+@media print { h1, h2 { page-break-after: avoid; } h1 { page-break-before: auto; } }
+td:first-child { min-width: 9em }
+
+#title-block-header .subtitle { font-size: 1.05em; color: #333; margin: 0.3em 0 0.1em; }
+#title-block-header .author { font-weight: 600; font-size: 1.05em; margin: 0.1em 0 1em; }
+p:has(> strong:only-child) { break-after: avoid; page-break-after: avoid; }
+tr { break-inside: avoid; page-break-inside: avoid; }

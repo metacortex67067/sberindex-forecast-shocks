@@ -1,0 +1,6 @@
+# Только для FULL=1: Prophet и foundation-модели (Chronos-2, TimesFM 2.5). Ставится поверх requirements.txt:
+#   pip install -r requirements.txt -r requirements-gpu.txt
+# Версии на дату расчётов (октябрь 2026). Совместимость с requirements.txt проверена.
+chronos-forecasting==2.3.2
+timesfm[torch]==3.0.2
+prophet==1.5.0

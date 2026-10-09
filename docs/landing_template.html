@@ -1,0 +1,437 @@
+<title>Расходы МО: прогноз и шоки</title>
+<meta name="description" content="Прогноз потребления в муниципальных образованиях на 1, 3, 6 и 12 месяцев и раннее обнаружение шоков по данным СберИндекса">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: одна колонка 1120px; слева у секций номер шага, справа крупный тезис, дополнение и интерактивные графики.
+   Цвета: зелёный для финальной модели, приглушённый красный для Prophet, оранжевый для тревог и шоков. */
+:root {
+  --bg: #f4f7f5; --surface: #ffffff; --ink: #13201b; --muted: #5a6a63; --line: #d6e0db; --soft: #e9f1ed;
+  --accent: #0d7451; --accent-ink: #ffffff; --prophet: #a8433f; --shock: #d4561f; --grey: #8b9993; --ok: #0d7451; --bad: #b8402f;
+  --f-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --s-1: 0.9rem; --s0: 1.0625rem; --s1: 1.25rem; --s2: 1.6rem; --s3: 2.3rem; --s4: 3.1rem;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1412; --surface: #131d1a; --ink: #e4eee9; --muted: #95a8a0; --line: #24342f; --soft: #18241f;
+  --accent: #3cc493; --accent-ink: #06130e; --prophet: #e2827c; --shock: #ff8a55; --grey: #7d8d87; --ok: #3cc493; --bad: #ff8a7a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1412; --surface: #131d1a; --ink: #e4eee9; --muted: #95a8a0; --line: #24342f; --soft: #18241f;
+  --accent: #3cc493; --accent-ink: #06130e; --prophet: #e2827c; --shock: #ff8a55; --grey: #7d8d87; --ok: #3cc493; --bad: #ff8a7a; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: var(--s0); line-height: 1.55; margin: 0 }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 0 64px }
+h1, h2, h3 { text-wrap: balance; margin: 0 }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(2rem, 5.4vw, var(--s4)); line-height: 1.08; letter-spacing: -0.01em }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: clamp(1.35rem, 3vw, var(--s2)); line-height: 1.2 }
+h3 { font-size: var(--s1); font-weight: 600 }
+p { margin: 0; max-width: 70ch }
+a { color: var(--accent) }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.eyebrow { font-family: var(--f-mono); font-size: var(--s-1); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted) }
+header.hero { padding-block: 56px 28px; display: grid; gap: 18px; border-bottom: 1px solid var(--line) }
+.hero .lede { font-size: var(--s1); color: var(--muted); max-width: 62ch }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin-top: 18px; border-top: 1px solid var(--line) }
+.stat { padding: 16px 16px 4px 0; display: grid; gap: 6px; align-content: start }
+.stat + .stat { padding-left: 16px; border-left: 1px solid var(--line) }
+.stat b { font-family: var(--f-display); font-weight: 700; font-size: clamp(1.6rem, 3.4vw, 2.3rem); color: var(--accent); line-height: 1 }
+.stat span { font-size: var(--s0); color: var(--muted); line-height: 1.4 }
+section { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 28px; padding-block: 44px; border-bottom: 1px solid var(--line) }
+.rail { position: relative }
+.rail .step { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); display: grid; gap: 4px }
+.rail .step b { font-family: var(--f-display); font-size: var(--s3); color: var(--accent); font-weight: 500; line-height: 1 }
+.content { display: grid; gap: 20px; min-width: 0 }
+.content > h2 + p { font-size: var(--s1); line-height: 1.5; color: var(--muted); max-width: 64ch }
+.panel > h3 { margin-bottom: 10px }
+.panel > p { margin-top: 10px; color: var(--muted) }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0 }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0 }
+#selMo { flex: 1 1 220px; max-width: 420px }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--surface) }
+.seg button { font: inherit; font-size: var(--s-1); border: 0; background: transparent; color: var(--ink); padding: 7px 14px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink) }
+.seg button:focus-visible, select:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+select { min-width: 0; flex: 0 1 auto; width: auto; text-overflow: ellipsis; font: inherit; font-size: var(--s-1); padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); max-width: 100% }
+.chip { font: inherit; font-size: var(--s-1); border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 5px 11px; cursor: pointer }
+.chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink) }
+.chart { position: relative; height: 340px; min-width: 0 }
+.chart.tall { height: 400px } .chart.short { height: 260px } .chart.det { height: 560px }
+.scroll { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: var(--s-1) }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { color: var(--muted); font-weight: 500; white-space: nowrap }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
+tr.hl td { background: var(--soft); font-weight: 600 }
+.good { color: var(--ok) } .badc { color: var(--bad) }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px }
+.flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch }
+.flow .col { display: grid; gap: 10px; align-content: start; min-width: 0 }
+.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); font-size: var(--s-1) }
+.node b { display: block; font-size: var(--s0); margin-bottom: 2px }
+.node.key { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent) }
+.node.news { border-style: dashed }
+.formula { font-family: var(--f-mono); font-size: 0.95rem; background: var(--soft); border-radius: 8px; padding: 12px 14px; overflow-x: auto; white-space: nowrap }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: var(--s-1); color: var(--muted) }
+.legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px }
+.muted { color: var(--muted) } .small { font-size: var(--s-1) }
+.matrix td { text-align: center; font-family: var(--f-mono) }
+.matrix td:first-child { text-align: left; font-family: var(--f-body) }
+.hit { color: var(--accent); font-weight: 600 } .miss { color: var(--grey) }
+.msg { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface) }
+.msg > div { padding: 12px 14px; font-size: var(--s0); min-width: 0 }
+.msg > div + div { border-left: 1px solid var(--line) }
+.msg .t { color: var(--ink) }
+.tag { display: inline-block; font-family: var(--f-mono); font-size: 0.8rem; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); margin: 2px 4px 2px 0 }
+.tag.sev3 { border-color: var(--shock); color: var(--shock) } .tag.sev2 { border-color: var(--accent); color: var(--accent) }
+.verdict { font-family: var(--f-mono); font-size: 0.8rem; text-transform: uppercase; letter-spacing: .06em }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 75ch }
+pre { margin: 0; background: var(--soft); border-radius: 8px; padding: 14px; overflow-x: auto; font-family: var(--f-mono); font-size: 0.85rem }
+.note { border-left: 3px solid var(--shock); padding: 4px 0 4px 12px; color: var(--ink); max-width: 75ch }
+footer { padding-block: 28px; color: var(--muted); font-size: var(--s0) }
+@media (max-width: 860px) {
+  section { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-block: 34px }
+  .rail .step { position: static; display: flex; gap: 10px; align-items: baseline }
+  .grid2, .flow { grid-template-columns: minmax(0, 1fr) }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .stat:nth-child(3) { padding-left: 0; border-left: 0 }
+  .msg { grid-template-columns: minmax(0, 1fr) } .msg > div + div { border-left: 0; border-top: 1px solid var(--line) }
+  .chart { height: 300px }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">СберИндекс · трек «Прогнозирование» · Команда: Timofey Usenko MISIS</div>
+  <h1>Расходы МО: прогноз и шоки</h1>
+  <p class="lede">Прогноз безналичных расходов жителя муниципального образования на 1, 3, 6 и 12 месяцев и обнаружение резких изменений в первый же месяц. Новости объясняют крупные шоки.</p>
+  <div class="stats" id="stats"></div>
+</header>
+
+<section id="arch">
+  <div class="rail"><div class="step"><b>01</b></div></div>
+  <div class="content">
+    <h2>Сезонность берётся у соседей и у страны</h2>
+    <p>У каждого ряда 24 месяца, а в первой точке прогноза только 12, по одному наблюдению на месяц года. Модель STF переносит сезонность с тысяч похожих рядов и с национальных рядов СберИндекса, которые начинаются в 2018 г. Девять вариантов STF и две foundation-модели усредняются в логарифмах с равными весами.</p>
+    <div class="formula">log ŷ(T+h) = уровень(T) + Σ<sub>k≤h</sub> [a + (g - a)·φ<sup>k</sup>] + сезонность<sub>категория, регион, МО</sub>(месяц T+h)</div>
+    <div class="flow">
+      <div class="col">
+        <div class="eyebrow">данные</div>
+        <div class="node"><b>Расходы МО</b>СберИндекс: 13 122 ряда, 2023-01…2024-12, объединённые МО склеены</div>
+        <div class="node"><b>Национальные ряды</b>СберИндекс: месячные с 2018 г., недельные по 46 категориям</div>
+        <div class="node news"><b>Новости</b>ТАСС, РИА Новости, Интерфакс, МЧС России: 356 тыс. сообщений</div>
+      </div>
+      <div class="col">
+        <div class="eyebrow">модели</div>
+        <div class="node key"><b>STF × 9</b>уровень, затухающий рост и сезонность, сжатая к региону и категории</div>
+        <div class="node"><b>Chronos-2, TimesFM 2.5</b>без дообучения, удлинённый контекст по национальному ряду</div>
+        <div class="node news"><b>Qwen2.5-7B</b>происшествие, тип, тяжесть от 0 до 3, МО строго из справочника СберИндекса</div>
+      </div>
+      <div class="col">
+        <div class="eyebrow">результат</div>
+        <div class="node key"><b>Прогноз на 1, 3, 6, 12 мес.</b>ансамбль из 11 членов и интервалы по ошибкам бэктеста</div>
+        <div class="node"><b>Тревога «МО × месяц»</b>14 детекторов, лучший по сумме проверок BOCPD с порогом по месяцу</div>
+        <div class="node news"><b>Объяснение</b>происшествия этого МО и региона: тип, тяжесть, источники</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="models">
+  <div class="rail"><div class="step"><b>02</b></div></div>
+  <div class="content">
+    <h2>Точнее Prophet на всех горизонтах и во всех режимах</h2>
+    <p>Все модели оценены на одном наборе прогнозов по 12 096 полным рядам. Под графиком: изменение MAE к Prophet, 95 % доверительный интервал кластерного бутстрепа по МО и доля рядов, где финальная модель точнее.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Режим оценки" id="modeSeg">
+        <button type="button" id="m-rolling" data-mode="rolling" aria-pressed="true">скользящий бэктест</button>
+        <button type="button" id="m-holdout" data-mode="holdout">одна точка T = 2024-12 - h</button>
+        <button type="button" id="m-h2" data-mode="h2_2024">цели 2024-07…12</button>
+      </div>
+    </div>
+    <div class="controls" id="famChips" aria-label="Семейства моделей"></div>
+    <div class="panel"><div class="chart tall"><canvas id="cMae" aria-label="MAE по горизонтам"></canvas></div></div>
+    <div class="panel scroll"><table id="tVs"></table></div>
+    <div class="panel scroll"><table id="tCat"></table></div>
+  </div>
+</section>
+
+<section id="series">
+  <div class="rail"><div class="step"><b>03</b></div></div>
+  <div class="content">
+    <h2>Факт и прогноз для 30 МО</h2>
+    <p>Восемь районов Москвы, три округа Санкт-Петербурга, 18 крупных городов и Орск. На графике факт 2023-2024 гг., прогнозы финальной модели и Prophet из каждой точки 2024 г. и прогноз на 2025 г. с 80 %-интервалом.</p>
+    <div class="controls">
+      <select id="selMo" aria-label="МО"></select>
+      <select id="selCat" aria-label="Категория"></select>
+      <div class="seg" role="group" aria-label="Горизонт" id="hSeg">
+        <button type="button" id="h-1" data-h="1" aria-pressed="true">h = 1</button>
+        <button type="button" id="h-3" data-h="3">h = 3</button>
+        <button type="button" id="h-6" data-h="6">h = 6</button>
+      </div>
+    </div>
+    <div class="panel"><div class="chart tall"><canvas id="cSeries" aria-label="Ряд и прогнозы"></canvas></div>
+      <div class="legend" style="margin-top:10px"><span><i style="background:var(--ink)"></i>факт</span><span><i style="background:var(--accent)"></i>финальная модель</span><span><i style="background:var(--prophet)"></i>Prophet</span><span><i style="background:var(--accent);opacity:.35;height:10px"></i>2025: прогноз и 80 %-интервал</span></div>
+      <p id="seriesMae"></p>
+    </div>
+  </div>
+</section>
+
+<section id="ladder">
+  <div class="rail"><div class="step"><b>04</b></div></div>
+  <div class="content">
+    <h2>Каждый шаг проверен абляцией</h2>
+    <p>MAE в скользящем бэктесте после каждого шага, от Prophet (шаг 0) до финальной модели (шаг 6), и подходы, которые не вошли в решение.</p>
+    <div class="grid2">
+      <div class="panel"><div class="chart"><canvas id="cAbl" aria-label="Абляция"></canvas></div></div>
+      <div>
+        <ul class="plain" id="ablList"></ul>
+        <h3 style="margin:18px 0 8px">Не вошло в решение</h3>
+        <ul class="plain">
+          <li>LightGBM поверх STF с новостями, погодой и ИПЦ: не лучше ансамбля (h = 1: 342 против 324).</li>
+          <li>Собственный тренд МО по году истории: ошибка при h = 12 выросла с 650 до 750.</li>
+          <li>Нормировка на число дней, медианный уровень, веса по прошлым ошибкам: хуже или не лучше равных весов.</li>
+          <li>Foundation-модели на исходном ряду хуже Prophet (Chronos-2, h = 12: 2 805), поэтому для них подготовлены данные.</li>
+          <li>Поправка уровня после тревоги: ошибка выросла с 338 до 365, шоки в среднем устойчивы.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="shocks">
+  <div class="rail"><div class="step"><b>05</b></div></div>
+  <div class="content">
+    <h2>14 детекторов, четыре проверки, один бюджет тревог</h2>
+    <p>Шок означает неожиданность месяца: остаток прогноза на 1 месяц после вычитания общего для страны эффекта. Лучший по сумме проверок BOCPD: первый на реестре реальных событий 2024 г. и самый быстрый. Панельный детектор лучший на местных синтетических шоках, региональный уровень на шоках, общих для региона.</p>
+    <div class="panel scroll"><h3>Средний ранг по четырём проверкам</h3><table id="tScore"></table>
+      <p>Реальных событий мало (8 и 49), поэтому различия между лучшими детекторами на них статистически не значимы.</p></div>
+    <div class="panel"><h3>Полусинтетика: шоки 5-30 % в реальных рядах</h3><div class="chart det"><canvas id="cDet" aria-label="Детекторы"></canvas></div>
+      <p>F1 и полнота на местных шоках, полнота на региональных шоках. Порог каждого детектора: 2 ложные тревоги на 100 ряд-месяцев.</p></div>
+    <div class="panel scroll"><h3>Реестр событий 2024 г.: тревога в месяц события или в следующий</h3><table class="matrix" id="tReg"></table></div>
+    <div class="panel">
+      <h3>Случай: детектор и новости</h3>
+      <div class="controls" role="group" aria-label="Случай" id="caseSeg" style="margin-bottom:10px"></div>
+      <div class="chart"><canvas id="cCase" aria-label="Оценка детектора по категориям и число сообщений"></canvas></div>
+      <p id="caseNote"></p>
+    </div>
+    <div class="panel scroll"><h3>Тревоги 2024 г. с крупным происшествием в том же МО и месяце</h3>
+      <p id="alarmStats" style="margin:0 0 10px"></p><table id="tAlarms"></table></div>
+  </div>
+</section>
+
+<section id="news">
+  <div class="rail"><div class="step"><b>06</b></div></div>
+  <div class="content">
+    <h2>Языковая модель размечает, справочник ограничивает</h2>
+    <p>Qwen2.5-7B читает сообщение и возвращает JSON: происшествие ли это, тип, тяжесть и места текстом. Затем из справочника СберИндекса подбираются МО внутри названного региона, и модель выбирает одно из них, поэтому МО всегда существует в данных. Шоки заранее новости почти не предсказывают, лучший предиктор инерция тревог.</p>
+    <div class="grid2">
+      <div class="panel"><h3>Доля верных среди выданных событий, 200 проверочных сообщений</h3><div class="chart short"><canvas id="cNews" aria-label="Точность новостей"></canvas></div>
+        <p id="newsNote"></p></div>
+      <div class="panel"><h3>Раннее предупреждение, ROC-AUC на 2024-06…11</h3><div class="chart short"><canvas id="cEw" aria-label="ROC-AUC раннего предупреждения"></canvas></div></div>
+    </div>
+    <div id="newsEx" style="display:grid;gap:12px"></div>
+  </div>
+</section>
+
+<section id="y2025">
+  <div class="rail"><div class="step"><b>07</b></div></div>
+  <div class="content">
+    <h2>Прогноз на 2025 г. против факта СберИндекса</h2>
+    <p>Прогноз построен по данным до декабря 2024 г. Данных по МО за 2025 г. нет, поэтому прогноз агрегирован по МО с весами населения и сравнён с национальными рядами СберИндекса.</p>
+    <div class="controls"><select id="selCat25" aria-label="Категория"></select></div>
+    <div class="panel"><div class="chart"><canvas id="c2025" aria-label="Прирост 2025"></canvas></div><p id="note25"></p></div>
+    <div class="panel scroll"><table id="t2025"></table></div>
+  </div>
+</section>
+
+<section id="repro">
+  <div class="rail"><div class="step"><b>08</b></div></div>
+  <div class="content">
+    <h2>Запуск одной командой</h2>
+    <p>Точные версии пакетов закреплены в requirements.txt, конфигурации лежат в configs/*.yaml, методологический отчёт в REPORT.md и reports/REPORT.pdf.</p>
+    <pre>pip install -r requirements.txt   # Python 3.12 или 3.13
+bash run_all.sh                   # таблицы, графики, лендинг и отчёт без GPU, около 1-1,5 ч
+FULL=1 bash run_all.sh            # с пересчётом шагов, которым нужен GPU</pre>
+  </div>
+</section>
+<footer>Данные: СберИндекс (CC BY-SA 4.0), Росстат, ERA5, Telegram-каналы ТАСС, РИА Новости, Интерфакс, МЧС России. Модели: STF, Chronos-2, TimesFM 2.5, Qwen2.5-7B-Instruct.</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const D = /*__DATA__*/null;
+const $ = s => document.querySelector(s);
+const fmt = (v, d = 0) => v == null ? "-" : v.toLocaleString("ru-RU", { minimumFractionDigits: d, maximumFractionDigits: d }).replace("\u2212", "-");
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const charts = {};
+function mk(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart(document.getElementById(id), cfg); }
+function base() {
+  return { responsive: true, maintainAspectRatio: false, animation: { duration: 250 },
+    plugins: { legend: { labels: { color: css("--muted"), boxWidth: 12, font: { family: css("--f-body") } } },
+      tooltip: { titleFont: { family: css("--f-body") }, bodyFont: { family: css("--f-mono") } } },
+    scales: { x: { ticks: { color: css("--muted") }, grid: { color: css("--line") } }, y: { ticks: { color: css("--muted") }, grid: { color: css("--line") } } } };
+}
+const famColor = f => ({ final: css("--accent"), prophet: css("--prophet"), stf: "#5aa98b", fm: "#6d8fd6", classic: "#c49a3a", naive: css("--grey") })[f];
+
+// ---- hero
+(function () {
+  const vp = D.vsProphet.filter(r => r.mode === "rolling");
+  const fin = D.lb.rolling.find(m => m.id === "final");
+  const tot = D.check2025.summary.find(s => s.cat === "Все категории");
+  const items = [[fmt(vp[0].delta, 0) + " %", `MAE к Prophet на 1 месяц, на 12 месяцев ${fmt(vp[3].delta, 0)} %`],
+    ["24 из 24", "ячеек «категория × горизонт», где модель точнее Prophet"],
+    [fmt(Math.abs(tot.err), 2) + " п.п.", `ошибка прогноза прироста на 2025 г.: ${fmt(tot.pred, 2)} % против ${fmt(tot.fact, 2)} %`],
+    [fmt(100 * D.newsAcc.find(r => r.metric === "v2: оба (строго)").p, 0) + " %", `событий из новостей верны по месту и типу (версия на правилах: ${fmt(100 * D.newsAcc.find(r => r.metric === "v1: оба (все 200)").p, 0)} %)`]];
+  $("#stats").innerHTML = items.map(([b, s]) => `<div class="stat"><b class="num">${b}</b><span>${s}</span></div>`).join("");
+})();
+
+// ---- модели
+let mode = "rolling", fams = new Set(["final", "prophet", "stf", "fm", "classic", "naive"]);
+const FAM = [["final", "финальная модель"], ["stf", "STF"], ["fm", "foundation"], ["classic", "ETS / Theta / ARIMA"], ["prophet", "Prophet"], ["naive", "наивные"]];
+let showAll = false;
+const MAIN = new Set(["final", "ens_stf9", "prophet_default", "naive", "snaive_growth", "chronos2_extended", "timesfm25_extended",
+  "ets_stf_resid", "theta_stf_resid", "arima_stf_resid"]);
+$("#famChips").innerHTML = FAM.map(([k, n]) => `<button type="button" class="chip" id="fam-${k}" data-f="${k}" aria-pressed="true">${n}</button>`).join("") +
+  `<button type="button" class="chip" id="fam-all" data-all="1" aria-pressed="false">+ все режимы подачи данных</button>`;
+$("#famChips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (!b) return;
+  if (b.dataset.all) { showAll = !showAll; b.setAttribute("aria-pressed", showAll); drawMae(); return; }
+  const f = b.dataset.f;
+  fams.has(f) ? fams.delete(f) : fams.add(f); b.setAttribute("aria-pressed", fams.has(f)); drawMae(); });
+$("#modeSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; mode = b.dataset.mode;
+  [...$("#modeSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); drawMae(); drawVs(); });
+function drawMae() {
+  const ms = D.lb[mode].filter(m => fams.has(m.family) && m.id !== "snaive" && (showAll || MAIN.has(m.id)));
+  const hs = ["h = 1", "h = 3", "h = 6", "h = 12"];
+  mk("cMae", { type: "bar", data: { labels: hs, datasets: ms.map(m => ({ label: m.name, data: m.mae, backgroundColor: famColor(m.family),
+      borderColor: m.id === "final" ? css("--ink") : "transparent", borderWidth: m.id === "final" ? 1.5 : 0,
+      hidden: false, categoryPercentage: 0.86, barPercentage: 0.95 })) },
+    options: Object.assign(base(), { plugins: Object.assign(base().plugins, { legend: { position: "bottom", labels: { color: css("--muted"), boxWidth: 10, font: { size: 11 } } } }),
+      scales: { x: { ticks: { color: css("--muted") }, grid: { display: false } }, y: { title: { display: true, text: "MAE, руб./жителя в месяц", color: css("--muted") },
+        ticks: { color: css("--muted") }, grid: { color: css("--line") }, suggestedMax: 1600, max: mode === "rolling" ? undefined : undefined } } }) });
+}
+function drawVs() {
+  const rows = D.vsProphet.filter(r => r.mode === mode);
+  $("#tVs").innerHTML = `<thead><tr><th>h</th><th class="num">прогнозов</th><th class="num">MAE Prophet</th><th class="num">MAE модели</th><th class="num">Δ</th><th class="num">95 % ДИ Δ, руб.</th><th class="num">рядов, где модель точнее</th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${r.h}</td><td class="num">${fmt(r.n)}</td><td class="num">${fmt(r.prophet)}</td><td class="num good">${fmt(r.final)}</td><td class="num good">${fmt(r.delta, 1)} %</td><td class="num">${fmt(r.lo)} … ${fmt(r.hi)}</td><td class="num">${fmt(r.win, 1)} %</td></tr>`).join("") + "</tbody>";
+}
+$("#tCat").innerHTML = `<thead><tr><th>категория (скользящий бэктест)</th>${[1, 3, 6, 12].map(h => `<th class="num">h = ${h}: Prophet → модель</th>`).join("")}</tr></thead><tbody>` +
+  D.byCategory.map(c => `<tr><td>${c.cat}</td>${c.final.map((f, i) => `<td class="num">${fmt(c.prophet[i])} → <b class="good">${fmt(f)}</b></td>`).join("")}</tr>`).join("") + "</tbody>";
+
+// ---- ряды
+const selMo = $("#selMo"), selCat = $("#selCat");
+selMo.innerHTML = D.series.map((s, i) => `<option value="${i}">${s.name}, ${s.region}</option>`).join("");
+selCat.innerHTML = D.categories.map(c => `<option>${c}</option>`).join("");
+let hSel = "1";
+$("#hSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; hSel = b.dataset.h;
+  [...$("#hSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); drawSeries(); });
+selMo.addEventListener("change", drawSeries); selCat.addEventListener("change", drawSeries);
+function drawSeries() {
+  const s = D.series[+selMo.value], c = s.cats[selCat.value];
+  if (!c) return;
+  const labels = D.months.concat(["2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"]);
+  const pad = arr => { const a = new Array(labels.length).fill(null); arr.forEach(([i, v]) => a[i] = v); return a; };
+  const f25 = new Array(24).fill(null).concat(c.f25), lo = new Array(24).fill(null).concat(c.lo), hi = new Array(24).fill(null).concat(c.hi);
+  f25[23] = c.y[23]; lo[23] = c.y[23]; hi[23] = c.y[23];
+  const fin = c.fin[hSel] || [], pro = c.pro[hSel] || [];
+  mk("cSeries", { type: "line", data: { labels, datasets: [
+    { label: "80 %-интервал (низ)", data: lo, borderWidth: 0, pointRadius: 0, fill: false },
+    { label: "80 %-интервал", data: hi, borderWidth: 0, pointRadius: 0, fill: "-1", backgroundColor: css("--accent") + "33" },
+    { label: "прогноз 2025", data: f25, borderColor: css("--accent"), borderWidth: 2, pointRadius: 0, borderDash: [4, 3] },
+    { label: "факт", data: c.y.concat(new Array(12).fill(null)), borderColor: css("--ink"), borderWidth: 2, pointRadius: 2 },
+    { label: `модель, h = ${hSel}`, data: pad(fin), borderColor: css("--accent"), backgroundColor: css("--accent"), borderWidth: 2, pointRadius: 3, spanGaps: true },
+    { label: `Prophet, h = ${hSel}`, data: pad(pro), borderColor: css("--prophet"), backgroundColor: css("--prophet"), borderWidth: 2, pointRadius: 3, spanGaps: true } ] },
+    options: Object.assign(base(), { plugins: Object.assign(base().plugins, { legend: { display: false } }),
+      scales: { x: { ticks: { color: css("--muted"), maxTicksLimit: 12 }, grid: { color: css("--line") } }, y: { ticks: { color: css("--muted") }, grid: { color: css("--line") } } } }) });
+  const mae = arr => { const e = arr.filter(([i]) => c.y[i] != null).map(([i, v]) => Math.abs(c.y[i] - v)); return e.length ? e.reduce((a, b) => a + b, 0) / e.length : null; };
+  $("#seriesMae").textContent = `MAE этого ряда при h = ${hSel}: финальная модель ${fmt(mae(fin))} руб., Prophet ${fmt(mae(pro))} руб. (${fin.length} точек прогноза).`;
+}
+
+// ---- абляция
+function drawAbl() { mk("cAbl", { type: "line", data: { labels: D.ablation.steps.map(s => s.split(".")[0]), datasets: [1, 3, 6, 12].map((h, j) => ({ label: `h = ${h}`,
+  data: D.ablation.rolling.map(r => r[j]), borderColor: [css("--accent"), "#5aa98b", "#c49a3a", css("--prophet")][j], backgroundColor: "transparent", pointRadius: 3, borderWidth: 2 })) },
+  options: Object.assign(base(), { scales: { x: { title: { display: true, text: "шаг (0: Prophet, 6: финальная модель)", color: css("--muted") }, ticks: { color: css("--muted") }, grid: { color: css("--line") } },
+    y: { title: { display: true, text: "MAE, скользящий бэктест", color: css("--muted") }, ticks: { color: css("--muted") }, grid: { color: css("--line") } } } }) }); }
+$("#ablList").innerHTML = D.ablation.steps.map((s, i) => `<li>${s}: <span class="mono">${D.ablation.rolling[i].map(v => fmt(v)).join(" / ")}</span></li>`).join("");
+
+// ---- детекторы и реестр
+function drawDet() { mk("cDet", { type: "bar", data: { labels: D.detectors.map(d => d.name), datasets: [
+  { label: "F1", data: D.detectors.map(d => d.f1), backgroundColor: css("--accent") },
+  { label: "полнота", data: D.detectors.map(d => d.recall), backgroundColor: "#6d8fd6" },
+  { label: "полнота: региональные шоки", data: D.detectors.map(d => d.recall_regional), backgroundColor: "#c49a3a" }] },
+  options: Object.assign(base(), { indexAxis: "y", scales: { x: { min: 0, max: 1, ticks: { color: css("--muted") }, grid: { color: css("--line") } }, y: { ticks: { color: css("--muted") }, grid: { display: false } } } }) }); }
+$("#tReg").innerHTML = `<thead><tr><th>детектор</th>${D.registry.events.map(e => `<th title="${e}">${e.replace(" 2024-", " ").replace(/^г\. /, "")}</th>`).join("")}<th class="num">итого</th></tr></thead><tbody>` +
+  D.registry.rows.map(r => `<tr class="${r.det === "bocpd" ? "hl" : ""}"><td>${r.det}</td>${r.hits.map(h => `<td class="${h ? "hit" : "miss"}">${h ? "✓" : "·"}</td>`).join("")}<td class="num">${r.hits.filter(Boolean).length} / ${r.hits.length}</td></tr>`).join("") + "</tbody>";
+$("#tScore").innerHTML = `<thead><tr><th>детектор</th><th class="num">F1: местные</th><th class="num">задержка, мес.</th><th class="num">полнота: региональные</th><th class="num">реестр 2024</th><th class="num">новости: тревога в месяц события</th><th class="num">средний ранг</th></tr></thead><tbody>` +
+  D.scorecard.map((r, i) => `<tr class="${i === 0 ? "hl" : ""}"><td>${r.name}</td><td class="num">${fmt(r.f1, 2)}</td><td class="num">${fmt(r.delay, 2)}</td><td class="num">${fmt(r.regional, 2)}</td><td class="num">${r.registry} из 8</td><td class="num">${fmt(r.news, 1)} %</td><td class="num">${fmt(r.rank, 2)}</td></tr>`).join("") + "</tbody>";
+const CASES = D.caseOrder.filter(k => D.cases[k]).map(k => [k, D.cases[k]]);
+$("#caseSeg").innerHTML = CASES.map(([k, c], i) => `<button type="button" class="chip" id="case-${k}" data-k="${k}" aria-pressed="${i === 0}">${c.name}</button>`).join("");
+$("#caseSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; [...$("#caseSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); drawCase(b.dataset.k); });
+function drawCase(k) {
+  caseK = k; const c = D.cases[k], pal = ["#13201b", "#3d7bd9", "#0d7451", "#c0392b", "#8e5bd0", "#b7791f"];
+  const ds = Object.entries(c.scores).map(([cat, v], i) => ({ type: "line", label: cat, data: v, borderColor: i === 0 ? css("--ink") : pal[i], backgroundColor: "transparent", borderWidth: 1.6, pointRadius: 2, yAxisID: "y" }));
+  ds.push({ type: "line", label: "порог тревоги", data: D.months.map(() => D.thr), borderColor: css("--shock"), borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5, yAxisID: "y" });
+  ds.push({ type: "bar", label: "сообщений о происшествиях в МО", data: c.msgs, backgroundColor: c.sev.map(s => s >= 3 ? css("--shock") + "aa" : s >= 2 ? "#c49a3a88" : css("--grey") + "55"), yAxisID: "y2" });
+  mk("cCase", { type: "bar", data: { labels: D.months, datasets: ds }, options: Object.assign(base(), { scales: {
+    x: { ticks: { color: css("--muted"), maxTicksLimit: 12 }, grid: { color: css("--line") } },
+    y: { title: { display: true, text: "оценка детектора", color: css("--muted") }, ticks: { color: css("--muted") }, grid: { color: css("--line") } },
+    y2: { position: "right", type: "logarithmic", min: 1, suggestedMax: 200, title: { display: true, text: "сообщений (лог.)", color: css("--muted") },
+      ticks: { color: css("--muted"), callback: v => [1, 10, 100, 1000].includes(v) ? v : "" }, grid: { display: false } } } }) });
+  $("#caseNote").textContent = `Линии: оценка панельного детектора по категориям, пунктир: порог тревоги ${fmt(D.thr, 2)} (2 % ряд-месяцев 2024 г.). Столбцы: число сообщений о происшествиях в МО, оранжевым выделена тяжесть 3. Совпадение по времени не доказывает причинной связи.`;
+}
+$("#alarmStats").textContent = `Из ${fmt(D.alarmStats.alarms2024)} тревог «МО × месяц» в 2024 г. у ${D.alarmStats.withMajorNews} в том же МО было происшествие тяжести не ниже 2 и не меньше 5 сообщений. Остальные тревоги остаются тревогами без новостного объяснения.`;
+$("#tAlarms").innerHTML = `<thead><tr><th>МО</th><th>месяц</th><th>категория</th><th class="num">оценка</th><th>происшествия по новостям (тип · тяжесть · сообщений)</th></tr></thead><tbody>` +
+  D.alarms.map(a => `<tr><td>${a.name}<div class="muted">${a.region}</div></td><td class="mono">${a.month}</td><td>${a.cat}</td><td class="num">${fmt(a.score, 1)}</td><td>${a.incidents.map(i => `<span class="tag sev${i.sev}">${i.type} · ${i.sev} · ${i.msgs}</span>`).join("")}</td></tr>`).join("") + "</tbody>";
+
+// ---- новости
+const NA = Object.fromEntries(D.newsAcc.map(r => [r.metric, r]));
+const pairs = [["место", "v1: место (все 200)", "v2: место"], ["тип", "v1: тип (все 200)", "v2: тип (строго)"], ["оба поля", "v1: оба (все 200)", "v2: оба (строго)"]];
+function drawNews() { mk("cNews", { type: "bar", data: { labels: pairs.map(p => p[0]), datasets: [
+  { label: "v1: правила + Natasha", data: pairs.map(p => 100 * NA[p[1]].p), backgroundColor: css("--grey") },
+  { label: "v2: Qwen2.5-7B + справочник", data: pairs.map(p => 100 * NA[p[2]].p), backgroundColor: css("--accent") }] },
+  options: Object.assign(base(), { scales: { x: { ticks: { color: css("--muted") }, grid: { display: false } }, y: { min: 50, max: 100, ticks: { color: css("--muted"), callback: v => v + " %" }, grid: { color: css("--line") } } } }) }); }
+const flt = NA["v2 отбросил «не-события» (тип v1 неверен)"], lost = NA["v2 потерял верные события v1"];
+$("#newsNote").textContent = `Версия 2 отбрасывает ${fmt(100 * flt.p, 0)} % сообщений без события (дайджесты, суды) и теряет ${fmt(100 * lost.p, 0)} % верных событий версии 1. ${fmt(D.newsStats.events)} сообщений о событиях объединены в ${fmt(D.newsStats.incidents)} происшествий.`;
+const ew = D.earlyWarning.filter(r => ["инерция (тревога и сила в t)", "только новости", "+ новости"].includes(r.features));
+const ewl = ["инерция (тревога и сила в t)", "+ новости", "только новости"];
+function drawEw() { mk("cEw", { type: "bar", data: { labels: ["прогноз на t+1", "наукастинг t"], datasets: ewl.map((f, j) => ({ label: f, data: ["forecast", "nowcast"].map(m => (ew.find(r => r.mode === m && r.features === f) || {}).auc),
+  backgroundColor: ["#6d8fd6", "#c49a3a", css("--accent")][j] })) },
+  options: Object.assign(base(), { scales: { x: { ticks: { color: css("--muted") }, grid: { display: false } }, y: { min: 0.45, max: 0.7, title: { display: true, text: "ROC-AUC", color: css("--muted") }, ticks: { color: css("--muted") }, grid: { color: css("--line") } } } }) }); }
+const CH = { tass: "ТАСС", ria: "РИА Новости", interfax: "Интерфакс", mchs: "МЧС России" };
+const TY = { flood: "паводок", fire: "пожар", drone_attack: "атака БПЛА", terror: "теракт", evacuation: "эвакуация", shelling: "обстрел",
+  utility_outage: "отключение ЖКУ", industrial_accident: "авария/взрыв", wildfire: "природный пожар", emergency_regime: "режим ЧС",
+  transport_disruption: "перекрытие транспорта", weather_extreme: "аномальная погода" };
+$("#newsEx").innerHTML = `<h3>Сообщение и разметка: примеры из проверочной выборки</h3>` + D.newsExamples.map(x => {
+  const v2ok = x.v2ok;
+  return `<div class="msg"><div><div class="eyebrow">${CH[x.channel]} · ${x.date}</div><div class="t" style="margin-top:6px">${x.text}</div></div>
+  <div><div class="verdict ${x.v1.ok ? "good" : "badc"}">v1 · ${x.v1.ok ? "верно" : "ошибка"}</div><div style="margin-top:6px"><span class="tag">${TY[x.v1.type] || x.v1.type}</span><div>${x.v1.place === "весь регион" ? "" : x.v1.place + ", "}${x.v1.region}</div></div></div>
+  <div><div class="verdict ${v2ok ? "good" : "badc"}">v2 · ${v2ok ? (x.v2.length ? "верно" : "верно отброшено") : "ошибка"}</div>${x.v2.length ? "" : `<div style="margin-top:6px">не происшествие, в признаки не попадает</div>`}${x.v2.map(e => `<div style="margin-top:6px"><span class="tag sev${e.sev}">${e.type} · тяжесть ${e.sev}</span><div>${e.place ? e.place + ", " : "уровень региона: "}${e.region}</div></div>`).join("")}</div></div>`; }).join("") +
+  `<p class="muted">Последний пример показывает ошибку версии 2: Михайловка Запорожской области (вне данных СберИндекса) привязана к Волгоградской области. Все ошибки проверочной выборки описаны в data/validation/news_v2_manual_labels.csv.</p>`;
+
+// ---- 2025
+const sel25 = $("#selCat25");
+const comparable = D.check2025.summary.map(s => s.cat);
+sel25.innerHTML = comparable.map(c => `<option>${c}</option>`).join("");
+sel25.addEventListener("change", draw2025);
+function draw2025() {
+  const k = sel25.value, m = D.check2025.monthly[k], s = D.check2025.summary.find(x => x.cat === k);
+  const lab = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+  mk("c2025", { type: "line", data: { labels: lab, datasets: [
+    { label: "факт 2025, СберИндекс (" + (s.source.startsWith("consumer") ? "месячный ряд" : "недельные категории") + ")", data: m.nat25, borderColor: css("--ink"), borderWidth: 2, pointRadius: 3 },
+    { label: "прогноз 2025 (агрегат МО)", data: m.pred25, borderColor: css("--accent"), borderWidth: 2, pointRadius: 3 },
+    { label: "бенчмарк: прирост 2024 без изменений", data: m.act24, borderColor: css("--grey"), borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0 }] },
+    options: Object.assign(base(), { scales: { x: { ticks: { color: css("--muted") }, grid: { color: css("--line") } }, y: { title: { display: true, text: "% г/г", color: css("--muted") }, ticks: { color: css("--muted") }, grid: { color: css("--line") } } } }) });
+  $("#note25").textContent = s.note ? `Сравнение некорректно: в национальном ряду методологический разрыв (${s.note}).` :
+    `Средний прирост: прогноз ${fmt(s.pred, 1)} %, факт ${fmt(s.fact, 1)} %, ошибка ${fmt(s.err, 1)} п.п. В 2024 г. разрыв между панелью и страной составлял ${fmt(s.gap24, 1)} п.п.`;
+}
+$("#t2025").innerHTML = `<thead><tr><th>категория</th><th class="num">прогноз 2025</th><th class="num">факт 2025</th><th class="num">ошибка, п.п.</th><th class="num">бенчмарк, п.п.</th><th class="num">разрыв 2024, п.п.</th></tr></thead><tbody>` +
+  D.check2025.summary.map(s => `<tr class="${s.cat === "Все категории" ? "hl" : ""}"><td>${s.cat}</td><td class="num">${fmt(s.pred, 1)} %</td><td class="num">${fmt(s.fact, 1)} %</td><td class="num">${s.note ? "разрыв ряда" : fmt(s.err, 1)}</td><td class="num">${s.note ? "-" : fmt(s.bench, 1)}</td><td class="num">${fmt(s.gap24, 1)}</td></tr>`).join("") + "</tbody>";
+
+let caseK = CASES[0][0];
+function drawAll() { drawMae(); drawVs(); drawSeries(); drawAbl(); drawDet(); drawCase(caseK); drawNews(); drawEw(); draw2025(); }
+if (window.Chart) { Chart.defaults.font.family = css("--f-body"); Chart.defaults.font.size = 13; Chart.defaults.locale = "ru-RU"; drawAll(); }
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => setTimeout(drawAll, 50)); } catch (e) {}
+new MutationObserver(() => setTimeout(drawAll, 50)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
